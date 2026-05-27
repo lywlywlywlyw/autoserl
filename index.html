@@ -280,26 +280,13 @@
            style="width: 100%; height: auto;">
 
            <div class="content has-text-justified">
-            <p>
-              Overview of AutoSERL.
-            </p>
-          
-            <p>
-              <strong>Auto Intervention 1</strong> (Sliding Window Intervention):
+              Overview of AutoSERL. <strong>Auto Intervention 1</strong> (Sliding Window Intervention):
               the robot is guided to the nearest point within the sliding window
               only when the angle &theta; between the trajectory's forward direction
               and the vector to that point satisfies &theta; &le; 90&deg;, preventing the robot
-              from being pulled back to already-visited positions.
-            </p>
-          
-            <p>
-              <strong>Auto Intervention 2</strong> (Safety Recovery Mechanism):
+              from being pulled back to already-visited positions. <strong>Auto Intervention 2</strong> (Safety Recovery Mechanism):
               when the robot is stuck, it is guided to the recovery point and the
-              demonstration segment is replayed to restore progress.
-            </p>
-          
-            <p>
-              <strong>Policy Training</strong>:
+              demonstration segment is replayed to restore progress. <strong>Policy Training</strong>:
               intervention-guided transitions and the single human demonstration are
               stored in the Demo Buffer and Replay Buffer for policy training.
             </p>
