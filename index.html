@@ -320,15 +320,30 @@
 <section class="hero teaser">
   <div class="container is-max-desktop">
     <div class="hero-body">
-      <!-- TODO: Replace with your teaser video -->
-      <video poster="" id="tree" autoplay controls muted loop height="100%" preload="metadata">
-        <!-- TODO: Add your video file path here -->
-        <source src="static/videos/banner_video.mp4" type="video/mp4">
-      </video>
-      <!-- TODO: Replace with your video description -->
+
+      <!-- teaser image -->
+      <img src="./teaser.png"
+           alt="Teaser image"
+           style="width: 100%; height: auto;">
+
       <h2 class="subtitle has-text-centered">
-        Aliquam vitae elit ullamcorper tellus egestas pellentesque. Ut lacus tellus, maximus vel lectus at, placerat pretium mi. Maecenas dignissim tincidunt vestibulum. Sed consequat hendrerit nisl ut maximus. 
-      </h2>
+      Overview of AutoSERL.
+    
+      <strong>Auto Intervention 1</strong> (Sliding Window Intervention):
+      the robot is guided to the nearest point within the sliding window
+      only when the angle &theta; between the trajectory's forward direction
+      and the vector to that point satisfies &theta; ≤ 90°, preventing the robot
+      from being pulled back to already-visited positions.
+    
+      <strong>Auto Intervention 2</strong> (Safety Recovery Mechanism):
+      when the robot is stuck, it is guided to the recovery point and the
+      demonstration segment is replayed to restore progress.
+    
+      <strong>Policy Training</strong>:
+      intervention-guided transitions and the single human demonstration are
+      stored in the Demo Buffer and Replay Buffer for policy training.
+    </h2>
+
     </div>
   </div>
 </section>
@@ -343,7 +358,13 @@
         <div class="content has-text-justified">
           <!-- TODO: Replace with your paper abstract -->
           <p>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin ullamcorper tellus sed ante aliquam tempus. Etiam porttitor urna feugiat nibh elementum, et tempor dolor mattis. Donec accumsan enim augue, a vulputate nisi sodales sit amet. Proin bibendum ex eget mauris cursus euismod nec et nibh. Maecenas ac gravida ante, nec cursus dui. Vivamus purus nibh, placerat ac purus eget, sagittis vestibulum metus. Sed vestibulum bibendum lectus gravida commodo. Pellentesque auctor leo vitae sagittis suscipit.
+            Learning effective robot control policies on physical hardware is challenging due to costly data collection and the difficulty of reward specification. Prior work has incorporated demonstrations into reinforcement learning (RL), yet existing approaches either require large numbers of demonstrations or depend on continuous human supervision during training.
+
+We present <em>AutoSERL</em>, a framework that leverages a single human demonstration to fully automate the human intervention process in real-world robot RL.
+
+Our key insight is that one demonstration trajectory encodes sufficient structural information to define three complementary mechanisms: a <em>sliding window intervention</em> that continuously guides exploration to prevent local optima and unsafe deviations, a <em>safety recovery mechanism</em> that detects and corrects failure states via predefined trajectory recovery points, and an <em>intervention termination</em> criterion that automatically disables guidance once the policy can independently complete the task, preserving its exploration advantage.
+
+We evaluate <em>AutoSERL</em> on six contact-intensive manipulation tasks across two robot platforms, spanning insertion, hanging, and hinge-based tasks. <em>AutoSERL</em> consistently outperforms SERL initialized with 20 demonstrations, behavior cloning, and MILES — a dedicated one-shot imitation learning baseline — across all tasks, achieves 100% success rate on insertion tasks, and demonstrates improved robustness to positional variations, all from a single demonstration.
           </p>
         </div>
       </div>
@@ -353,97 +374,100 @@
 <!-- End paper abstract -->
 
 
-<!-- Image carousel -->
-<section class="hero is-small">
-  <div class="hero-body">
-    <div class="container">
-      <div id="results-carousel" class="carousel results-carousel">
-       <div class="item">
-        <!-- TODO: Replace with your research result images -->
-        <img src="static/images/carousel1.jpg" alt="First research result visualization" loading="lazy"/>
-        <!-- TODO: Replace with description of this result -->
-        <h2 class="subtitle has-text-centered">
-          First image description.
-        </h2>
-      </div>
-      <div class="item">
-        <!-- Your image here -->
-        <img src="static/images/carousel2.jpg" alt="Second research result visualization" loading="lazy"/>
-        <h2 class="subtitle has-text-centered">
-          Second image description.
-        </h2>
-      </div>
-      <div class="item">
-        <!-- Your image here -->
-        <img src="static/images/carousel3.jpg" alt="Third research result visualization" loading="lazy"/>
-        <h2 class="subtitle has-text-centered">
-         Third image description.
-       </h2>
-     </div>
-     <div class="item">
-      <!-- Your image here -->
-      <img src="static/images/carousel4.jpg" alt="Fourth research result visualization" loading="lazy"/>
-      <h2 class="subtitle has-text-centered">
-        Fourth image description.
-      </h2>
-    </div>
-  </div>
-</div>
-</div>
-</section>
-<!-- End image carousel -->
-
-
-
-
-<!-- Youtube video -->
-<section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <!-- Paper video. -->
-      <h2 class="title is-3">Video Presentation</h2>
-      <div class="columns is-centered has-text-centered">
-        <div class="column is-four-fifths">
-          
-          <div class="publication-video">
-            <!-- TODO: Replace with your YouTube video ID -->
-            <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- End youtube video -->
-
 
 <!-- Video carousel -->
 <section class="hero is-small">
   <div class="hero-body">
     <div class="container">
-      <h2 class="title is-3">Another Carousel</h2>
+      <h2 class="title is-3">Task Videos</h2>
       <div id="results-carousel" class="carousel results-carousel">
+
         <div class="item item-video1">
-          <!-- TODO: Add poster image for better preview -->
           <video poster="" id="video1" controls muted loop height="100%" preload="metadata">
-            <!-- Your video file here -->
-            <source src="static/videos/carousel1.mp4" type="video/mp4">
+            <source src="videos/CorrectionTapeSuspension_AutoSERL.mp4" type="video/mp4">
           </video>
+          <h2 class="subtitle has-text-centered">CorrectionTapeSuspension_AutoSERL</h2>
         </div>
+
         <div class="item item-video2">
-          <!-- TODO: Add poster image for better preview -->
           <video poster="" id="video2" controls muted loop height="100%" preload="metadata">
-            <!-- Your video file here -->
-            <source src="static/videos/carousel2.mp4" type="video/mp4">
+            <source src="videos/CorrectionTapeSuspension_SERL.mp4" type="video/mp4">
           </video>
+          <h2 class="subtitle has-text-centered">CorrectionTapeSuspension_SERL</h2>
         </div>
+
         <div class="item item-video3">
-          <!-- TODO: Add poster image for better preview -->
           <video poster="" id="video3" controls muted loop height="100%" preload="metadata">
-            <!-- Your video file here -->
-            <source src="static/videos/carousel3.mp4" type="video/mp4">
+            <source src="videos/DrawerOpening_AutoSERL.mp4" type="video/mp4">
           </video>
+          <h2 class="subtitle has-text-centered">DrawerOpening_AutoSERL</h2>
         </div>
+
+        <div class="item item-video4">
+          <video poster="" id="video4" controls muted loop height="100%" preload="metadata">
+            <source src="videos/DrawerOpening_SERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">DrawerOpening_SERL</h2>
+        </div>
+
+        <div class="item item-video5">
+          <video poster="" id="video5" controls muted loop height="100%" preload="metadata">
+            <source src="videos/HangerSuspension_AutoSERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">HangerSuspension_AutoSERL</h2>
+        </div>
+
+        <div class="item item-video6">
+          <video poster="" id="video6" controls muted loop height="100%" preload="metadata">
+            <source src="videos/HangerSuspension_SERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">HangerSuspension_SERL</h2>
+        </div>
+
+        
+
+        <div class="item item-video9">
+          <video poster="" id="video9" controls muted loop height="100%" preload="metadata">
+            <source src="videos/SpoonSuspension_AutoSERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">SpoonSuspension_AutoSERL</h2>
+        </div>
+
+        <div class="item item-video10">
+          <video poster="" id="video10" controls muted loop height="100%" preload="metadata">
+            <source src="videos/SpoonSuspension_SERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">SpoonSuspension_SERL</h2>
+        </div>
+
+        <div class="item item-video11">
+          <video poster="" id="video11" controls muted loop height="100%" preload="metadata">
+            <source src="videos/USBInsertion_AutoSERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">USBInsertion_AutoSERL</h2>
+        </div>
+
+        <div class="item item-video12">
+          <video poster="" id="video12" controls muted loop height="100%" preload="metadata">
+            <source src="videos/USBInsertion_SERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">USBInsertion_SERL</h2>
+        </div>
+
+        <div class="item item-video7">
+          <video poster="" id="video7" controls muted loop height="100%" preload="metadata">
+            <source src="videos/PlugInsertion_AutoSERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">PlugInsertion_AutoSERL</h2>
+        </div>
+
+        <div class="item item-video8">
+          <video poster="" id="video8" controls muted loop height="100%" preload="metadata">
+            <source src="videos/PlugInsertion_SERL.mp4" type="video/mp4">
+          </video>
+          <h2 class="subtitle has-text-centered">PlugInsertion_SERL</h2>
+        </div>
+
       </div>
     </div>
   </div>
@@ -456,24 +480,24 @@
 
 
 <!-- Paper poster -->
-<section class="hero is-small is-light">
+<!-- <section class="hero is-small is-light">
   <div class="hero-body">
     <div class="container">
-      <h2 class="title">Poster</h2>
+      <h2 class="title">Poster</h2> -->
 
       <!-- TODO: Replace with your poster PDF -->
-      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
+      <!-- <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
           </iframe>
         
       </div>
     </div>
-  </section>
+  </section> -->
 <!--End paper poster -->
 
 
 
 <!--BibTex citation -->
-  <section class="section" id="BibTeX">
+  <!-- <section class="section" id="BibTeX">
     <div class="container is-max-desktop content">
       <div class="bibtex-header">
         <h2 class="title">BibTeX</h2>
@@ -490,7 +514,7 @@
   url={https://your-domain.com/your-project-page}
 }</code></pre>
     </div>
-</section>
+</section> -->
 <!--End BibTex citation -->
 
 
