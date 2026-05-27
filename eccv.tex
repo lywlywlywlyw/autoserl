@@ -1,0 +1,509 @@
+\documentclass[runningheads]{llncs}
+
+% ---------------------------------------------------------------
+% Include basic ECCV package
+ 
+% TODO REVIEW: Insert your submission number below by replacing '*****'
+% TODO FINAL: Comment out the following line for the camera-ready version
+% \usepackage[review,year=2026,ID=13604]{eccv} %publicdel
+\usepackage{multirow}
+
+% TODO FINAL: Un-comment the following line for the camera-ready version
+%\usepackage{eccv}
+
+% OPTIONAL: Un-comment the following line for a version which is easier to read
+% on small portrait-orientation screens (e.g., mobile phones, or beside other windows)
+%\usepackage[mobile]{eccv}
+
+
+% ---------------------------------------------------------------
+% Other packages
+
+% Commonly used abbreviations (\eg, \ie, \etc, \cf, \etal, etc.)
+% \usepackage{eccvabbrv} %publicdel
+
+% Include other packages here, before hyperref.
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% The "axessiblity" package can be found at: https://ctan.org/pkg/axessibility?lang=en
+\usepackage[accsupp]{axessibility}  % Improves PDF readability for those with disabilities.
+
+
+% ---------------------------------------------------------------
+% Hyperref package
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% Please disable hyperref *only* if you encounter grave issues.
+% hyperref with option pagebackref eases the reviewers' job, but should be disabled for the final version.
+%
+% If you comment hyperref and then uncomment it, you should delete
+% main.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you
+%  should be clear).
+
+% TODO FINAL: Comment out the following line for the camera-ready version
+%\usepackage[pagebackref,breaklinks,colorlinks,citecolor=eccvblue]{hyperref}
+% TODO FINAL: Un-comment the following line for the camera-ready version
+\usepackage{hyperref}
+
+% Support for ORCID icon
+\usepackage{orcidlink}
+
+
+\begin{document}
+
+% ---------------------------------------------------------------
+% TODO REVIEW: Replace with your title
+\title{One Demonstration Is Enough for Real-World Robotic Reinforcement Learning} 
+
+% TODO REVIEW: If the paper title is too long for the running head, you can set
+% an abbreviated paper title here. If not, comment out.
+%publicdel
+% \titlerunning{Abbreviated paper title}
+%%%%%%
+% TODO FINAL: Replace with your author list. 
+% Include the authors' OCRID for the camera-ready version, if at all possible.
+
+%publicdel
+% \author{First Author\inst{1}\orcidlink{0000-1111-2222-3333} \and
+% Second Author\inst{2,3}\orcidlink{1111-2222-3333-4444} \and
+% Third Author\inst{3}\orcidlink{2222--3333-4444-5555}}
+%%%%%%
+
+% TODO FINAL: Replace with an abbreviated list of authors.
+
+%publicdel
+% \authorrunning{F.~Author et al.}
+%%%
+% First names are abbreviated in the running head.
+% If there are more than two authors, 'et al.' is used.
+
+% TODO FINAL: Replace with your institution list.
+%publicdel
+% \institute{Princeton University, Princeton NJ 08544, USA \and
+% Springer Heidelberg, Tiergartenstr.~17, 69121 Heidelberg, Germany
+% \email{lncs@springer.com}\\
+% \url{http://www.springer.com/gp/computer-science/lncs} \and
+% ABC Institute, Rupert-Karls-University Heidelberg, Heidelberg, Germany\\
+% \email{\{abc,lncs\}@uni-heidelberg.de}}
+%%%%%%
+
+\maketitle
+
+
+\begin{abstract}
+  % Learning effective control policies directly on real robots is challenging due to the high cost of data collection and the difficulty of specifying dense reward functions. While prior work has leveraged demonstrations to bootstrap reinforcement learning (RL), existing approaches typically require many demonstrations or rely heavily on simulation. In this paper, we show that a single demonstration can be enough for real-world robot learning. We present an empirical framework that uses one human-provided demonstration to initialize and guide reinforcement learning directly on physical robotic systems. The demonstration is used to shape the learning process, enabling efficient exploration and rapid policy improvement without additional expert supervision. We evaluate our approach across multiple real-world robotic manipulation tasks and show that it consistently outperforms standard robotic RL and imitation-based baselines. Our results suggest that minimal demonstration can serve as a powerful catalyst for real-world RL, significantly reducing the burden of data collection while maintaining strong performance on manipulation tasks.
+  Learning effective robot control policies on physical hardware is challenging due to costly data collection and the difficulty of reward specification. Prior work has incorporated demonstrations into reinforcement learning (RL), yet existing approaches either require large numbers of demonstrations or depend on continuous human supervision during training. We present \textit{AutoSERL}, a framework that leverages a single human demonstration to fully automate the human intervention process in real-world robot RL. Our key insight is that one demonstration trajectory encodes sufficient structural information to define three complementary mechanisms: a \textit{sliding window intervention} that continuously guides exploration to prevent local optima and unsafe deviations, a \textit{safety recovery mechanism} that detects and corrects failure states via predefined trajectory recovery points, and an \textit{intervention termination} criterion that automatically disables guidance once the policy can independently complete the task, preserving its exploration advantage. We evaluate AutoSERL on six contact-intensive manipulation tasks across two robot platforms, spanning insertion, hanging, and hinge-based tasks. AutoSERL consistently outperforms SERL initialized with 20 demonstrations, behavior cloning, and MILES — a dedicated one-shot imitation learning baseline — across all tasks, achieves 100\% success rate on insertion tasks, and demonstrates improved robustness to positional variations, all from a single demonstration.
+  \keywords{Robotic Reinforcement Learning \and One-shot Learning \and Sample Efficiency}
+\end{abstract}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figs/teaser_bigger.png}
+    \caption{Overview of AutoSERL. \textbf{Auto Intervention 1} (Sliding Window 
+    Intervention): the robot is guided to the nearest point within the sliding window 
+    only when the angle $\theta$ between the trajectory's forward direction and the 
+    vector to that point satisfies $\theta \leq 90^\circ$, preventing the robot from 
+    being pulled back to already-visited positions. \textbf{Auto Intervention 2} 
+    (Safety Recovery Mechanism): when the robot is stuck, it is guided to the recovery point and the demonstration segment is replayed to restore progress. 
+    \textbf{Policy Training}: intervention-guided transitions and the single human 
+    demonstration are stored in the Demo Buffer and Replay Buffer for policy training.}
+    \label{fig:overview}
+\end{figure}
+
+
+\section{Introduction}\label{sec:intro}
+% RL 的困难→现有方案→现有方案的新困难→我们的解法→实验验证→贡献总结
+
+% Reinforcement Learning (RL) has achieved transformative breakthroughs in simulated domains, yet its deployment in the physical world remains constrained by a fundamental tension between exploratory efficiency and operational safety. Unlike simulation, where resets are instantaneous and failures are costless, real-world robotic exploration faces the constant risk of hardware degradation and catastrophic collisions. Furthermore, the inherent sample inefficiency of model-free RL often results in agents languishing in non-productive state spaces, failing to encounter the sparse reward signals necessary for policy convergence.
+Reinforcement learning (RL) has demonstrated remarkable success in simulated environments~\cite{mnih2013playing,silver2016mastering}, yet its deployment on physical robotic systems remains fundamentally constrained by two persistent challenges. First, real-world exploration carries inherent safety risks: unlike simulation where failures are costless, uncontrolled robot 
+motions can cause hardware damage or environmental collisions~\cite{dulac2019challenges}. Second, the sample inefficiency of model-free RL means that agents often fail to encounter the sparse reward signals necessary for policy convergence, particularly in contact-intensive tasks where successful 
+states occupy only a small fraction of the state space.
+
+% To navigate these hurdles, Human-in-the-loop paradigms have emerged as a robust framework for safe real-world training. In these setups, a human supervisor acts as a high-level heuristic, monitoring the agent’s trajectories in real-time. By intervening—either by teleoperating the robot out of a deadlock or by preemptively halting unsafe motions—the human effectively injects an expert-induced bias into the exploration process. This guidance transforms what would otherwise be hazardous trials into structured, high-quality data, significantly accelerating the learning curve.AU
+To address these challenges, recent work has proposed combining demonstrations 
+with RL to accelerate real-world learning~\cite{vecerik2017leveraging,rajeswaran2017learning,nair2018overcoming}. 
+\cite{luo2024serl} introduces a sample-efficient framework that mixes demonstration data with online experience, significantly improving training stability on physical hardware. Building upon this, \cite{luo2025precise} incorporates human-in-the-loop intervention during training, where a human operator monitors the robot in real time and teleoperates it out of deadlocks or unsafe states. The corrected trajectories are added to the replay buffer, providing high-quality guidance that helps overcome sparse rewards and prevents 
+unsafe exploration. This paradigm has proven effective for learning precise manipulation policies directly on real robots.
+
+
+% Despite these advantages, the heavy reliance on human oversight creates a scalability paradox. The expertise required to safeguard the robot simultaneously becomes the primary bottleneck of the system. Human intervention is inherently limited by cognitive fatigue, inconsistent response latencies, and an exorbitant cost per training hour. As robotic tasks move toward greater complexity and longer training durations, the requirement for constant human presence renders large-scale real-world RL logistically unfeasible.
+However reliance on continuous human supervision introduces a critical scalability bottleneck. Human operators are subject to cognitive fatigue, inconsistent response times, and high labor costs per training hour. As tasks grow more complex and training durations extend, the requirement for constant human presence becomes logistically impractical. This raises a fundamental question: \textit{can the benefits of human-in-the-loop training be preserved while eliminating the need for continuous human involvement?}
+
+% In this paper, we propose an Autonomous Intervention (Auto-Intervention) framework that replaces the human supervisor with a sophisticated suite of geometric and temporal heuristics to regulate real-world policy training. Our approach formalizes the "expert-in-the-loop" intuition into a closed-loop automated system consisting of two primary components. First, we introduce a direction-aware geometric intervention mechanism. By monitoring the agent's current pose relative to a sliding window of the reference trajectory, the system calculates a deviation angle. This specific geometric logic is what allows the system to act more like a mentor than a rigid constraint. It essentially distinguishes between a robot that is drifting off-course and one that is purposefully exploring. Second, we implement a stagnation-triggered recovery protocol to handle complex and unsafe interactions. When the robot enters a deadlock or stalls near an interactive object, the framework detects the lack of progress and triggers a "replay-based" recovery. By re-executing a segment of successful historical trajectories, the agent is effectively guided out of stagnation and repositioned into a productive state space. Finally, our framework incorporates an intervention-budgeted transition to Reinforcement Learning. By monitoring the frequency of interventions, the system adaptively reduces its regulatory role as the policy matures, eventually transitioning to fully autonomous RL once a stability threshold is met. This ensures that the agent graduates from rule-based guidance to independent mastery of the task.
+In this paper, we present \textit{AutoSERL}, a framework that replaces continuous human supervision with automated intervention mechanisms derived from a \textbf{single human demonstration}. Our key insight is that one demonstration trajectory encodes sufficient structural information about task geometry and contact sequences to serve as a complete guidance signal throughout training. Concretely, AutoSERL consists of three complementary components. A \textit{sliding window intervention} mechanism continuously monitors the 
+agent's end-effector pose relative to a window sliding along the demonstration trajectory, detecting deviations caused by local optima, Q-value overestimation, or environmental obstacles, and redirecting the robot accordingly. A \textit{safety recovery mechanism} detects stagnation near interaction objects and triggers a replay-based recovery by re-executing a predefined segment of the demonstration trajectory, restoring the robot to a productive state without human involvement. An \textit{intervention termination} criterion monitors intervention frequency during each episode and automatically disables all guidance once the policy demonstrates sufficient autonomy, allowing the agent to fully leverage RL's exploratory advantage without unnecessary constraint.
+
+We evaluate AutoSERL on six contact-intensive manipulation tasks spanning 
+insertion, hanging, and hinge-based categories across two robot platforms. 
+AutoSERL consistently outperforms \cite{luo2024serl} initialized with 20 
+demonstrations, behavior cloning (BC), and MILES~\cite{papagiannis2024miles} --- a dedicated one-shot imitation learning method --- across all tasks, achieves 100\% success rate on insertion tasks, and maintains strong performance under positional variations, all from a single demonstration. Our results demonstrate that one demonstration, when 
+carefully structured into an automated intervention system, is sufficient to match and exceed the effectiveness of both multi-demonstration RL and human-supervised training.
+
+The main contributions of this paper are as follows. 1) we propose AutoSERL, a framework that automates the human intervention process in real-world robot RL using only a single demonstration, eliminating the need for continuous human supervision; 2) we design three complementary mechanisms --- sliding window intervention, safety recovery, and intervention termination --- that together form a closed-loop automated guidance system derived entirely from one demonstration trajectory; 3) we conduct extensive real-world experiments on six contact-intensive manipulation tasks across two robot platforms, demonstrating that AutoSERL consistently outperforms multi-demonstration RL, behavior cloning, and one-shot imitation learning baselines.
+
+
+\section{Related Works}
+
+\subsection{Human-in-the-Loop RL}
+A prominent strategy to address the challenges of real-world exploration and sparse reward signals is to integrate human expertise directly into the training loop through real-time interventions. Paradigms such as Interactive Learning\cite{chen2025conrftreinforcedfinetuningmethod,liu2023robotlearningjobhumanintheloop,mandlekar2020humanintheloopimitationlearningusing,wu2025robocopilothumanintheloopinteractiveimitation} and DAgger-style imitation\cite{xu2025compliantresidualdaggerimproving,hoque2021thriftydaggerbudgetawarenoveltyrisk,kelly2019hgdaggerinteractiveimitationlearning,ross2011reductionimitationlearningstructured} allow human supervisors to provide corrective feedback or take over control when the agent enters a hazardous or non-productive state. By injecting this expert-induced bias, these methods transform random exploration into a structured data collection process, significantly accelerating policy convergence on physical hardware.
+However, these methods suffer from a "human bottleneck." The need for constant vigilance creates a scalability paradox: while humans ensure safety, their presence restricts training duration and scale due to cognitive fatigue, latency, and high costs. Instead, our Auto-Intervention framework achieves the benefits of corrective supervision without the need for a human in the loop.
+
+\subsection{Safety and Exploration in Real-World RL}
+An established approach to ensuring safety during real-world exploration is to employ Constrained Markov Decision Processes (CMDPs) or protective safety shields that filter out hazardous actions based on predefined constraints\cite{hu2025robottrainsrobotautomatic, thananjeyan2021recoveryrlsafereinforcement,li2020robustmodelpredictiveshielding,6225136, alshiekh2017safereinforcementlearningshielding, fisac2018generalsafetyframeworklearningbased}. By enforcing strict operational boundaries, these methods effectively safeguard hardware against catastrophic collisions during the learning process. However, such systems often require complex multi-robot coordination and specific hardware setups. Instead, our method achieves similar levels of autonomy and safety through purely rule-based geometric heuristics, requiring no additional robotic "teacher". 
+
+\subsection{Learning from Demonstration Replay}
+A highly efficient approach to accelerating policy acquisition is to utilize replay-based imitation learning, which estimates the robot’s pose relative to objects of interest and re-executes demonstrated action sequences\cite{johns2021coarsetofineimitationlearningrobot, valassakis2022demonstrateonceimitateimmediately,dipalo2023effectivenessretrievalalignmentreplay,wen2022demonstrateoncecategorylevelmanipulation}. By leveraging existing expert trajectories, these methods provide a strong initial bias that bypasses the need for exhaustive random exploration in high-dimensional state spaces.
+Instead, our approach utilizes a replay-based recovery protocol that leverages a sliding window of the agent's own successful historical trajectories. By re-executing these validated segments upon detecting stagnation or interaction deadlocks, our framework provides a computationally efficient and robust guidance mechanism.
+
+\section{Method}
+
+\subsection{Preliminaries}
+% Reinforcement learning tasks can be modeled as a Markov Decision Process  $\mathcal{M} = 
+% \left(\mathcal{S}, \mathcal{A}, \rho, P, r, \gamma\right)$, where 
+% $\mathcal{S}$ is the state space, 
+% $\mathcal{A}$ is the action space, 
+% $\rho(s_0)$ is the initial state distribution, 
+% $P$ is the state transition probability, 
+% $r$ is the reward function, 
+% and $\gamma$ is the discount factor. 
+% The learning objective is to maximize the expected cumulative reward.
+% Since the amount of data that can be sampled during reinforcement learning on real robots is very limited, Luo et al. proposed SERL\cite{luo2024serl}, a real-robot reinforcement learning method based on the RLPD algorithm, in order to improve sample efficiency while preserving the agent’s exploration capability. 
+% In SERL, a demo buffer is constructed to store demonstration data, and a replay buffer is maintained to store online data collected during training. At each network update, half of the batch is sampled from the demo buffer and the other half from the replay buffer. 
+% In this way, SERL accelerates learning by leveraging historical demonstration data while retaining the policy improvement brought by online exploration, thereby enabling efficient real-world training and significantly enhancing training stability.
+
+Reinforcement learning (RL) tasks can be modeled as a Markov Decision Process $\mathcal{M} = \left(\mathcal{S}, \mathcal{A}, \rho, P, r, \gamma\right)$, where $\mathcal{S}$ is the state space, $\mathcal{A}$ is the action space, $\rho(s_0)$ is the initial state distribution, $P$ is the state transition probability, $r$ is the reward function, and $\gamma$ is the discount factor. The learning objective is to maximize the expected cumulative reward. Our method is built upon SERL~\cite{luo2024serl}.
+
+\subsection{Automated Intervention Design}
+% Due to the high difficulty of some tasks and the sparsity of the reward signals, training can still fail when using the SERL method alone. To address this issue, \cite{luo2025precise} further proposed the HIL-SERL framework based on SERL. In HIL-SERL, human interventions are introduced during training to correct the robot's actions. The corrected actions provided by the human operator are stored in both the demo buffer and the replay buffer, thereby providing additional high-quality demonstrations for training. This process helps alleviate the negative impact of sparse rewards and enables faster and more stable reinforcement learning.
+
+% During the human intervention process, there are mainly three situations in which intervention is required. Taking tasks that involve interaction between a hand-held object and a single target object as an example, the first situation occurs when the training process falls into a local optimum. In this case, the magnitude of the output actions gradually decreases, and the robot arm keeps oscillating around a certain position. The second situation occurs when the Q-value is incorrectly estimated during training, causing the policy to continuously output actions that move the robot away from the target object, which significantly reduces learning efficiency. The third situation occurs when reinforcement learning is exploring normally, but obstacles exist in the real-world environment. Allowing the robot to freely explore may lead to collisions with surrounding obstacles or cause the robot to get stuck near them, potentially damaging the robot or objects in the environment.
+
+% Since HIL-SERL requires continuous human involvement during training, the associated labor cost is relatively high. Therefore, based on the characteristics of human intervention, we propose an automatic intervention method. This approach reduces human labor while maintaining the safety and efficiency of reinforcement learning training on real robots.
+While SERL significantly improves sample efficiency, training can still fail on tasks with high difficulty and sparse rewards. To address this, \cite{luo2025precise} proposed HIL-SERL, which extends SERL by introducing human interventions during training to correct the robot's actions, thereby alleviating the negative impact of sparse rewards and enabling faster and more stable learning. However, HIL-SERL requires continuous human involvement throughout training, resulting in high labor costs. To reduce this burden, we analyze the situations in which human intervention is required in HIL-SERL, and use these observations as the basis for designing AutoSERL.
+
+Taking tasks that involve interaction between a hand-held object and a single
+target object as an example, we identify three principal situations in which
+intervention is needed. The first situation occurs when the training process
+falls into a local optimum, where the magnitude of the output actions gradually
+decreases and the robot arm keeps oscillating around a certain position. The
+second situation occurs when the Q-value is incorrectly estimated during
+training, causing the policy to continuously output actions that move the robot
+away from the target object, which significantly reduces learning efficiency.
+The third situation occurs when reinforcement learning is exploring normally,
+but obstacles exist in the real-world environment, potentially leading to
+collisions with surrounding obstacles or causing the robot to get stuck. Beyond
+these three situations, a residual risk exists: even when none of the above
+conditions are met, the robot may still become physically stuck near an obstacle
+and fail to make further progress. These four risks collectively define the
+design requirements for AutoSERL.
+
+
+% \subsection{Implementation Details}
+% Based on the characteristics of human intervention, AutoSERL uses a single human demonstration trajectory as guidance. When safety risks occur during training, the method guides the robot to recover according to this trajectory, and once the policy becomes capable of completing the task independently, the intervention is promptly stopped.
+% All tasks considered in this paper involve interaction between a hand-held object and a single target object. Before training begins, a demonstration trajectory is manually collected. Our entire method is built upon and extended from this demonstration trajectory.
+\subsection{AutoSERL}
+AutoSERL uses a single human demonstration trajectory as guidance and addresses 
+the identified risks through three complementary mechanisms, as illustrated in 
+Fig.~\ref{fig:overview}. Before training begins, a demonstration trajectory 
+is manually collected, and two recovery points are defined on it: 
+$recover\ point_0$, a safe recovery target to which the robot can be guided 
+when a safety risk occurs, and $recover\ point_1$, a trajectory point at which 
+the robot is in stable contact with the interaction object. These two points 
+can be identified by replaying the demonstration trajectory on the robot and 
+serve as shared references across all three mechanisms.
+
+The first and second situations—local optimum convergence and erroneous 
+Q-value estimation—along with the third situation involving environmental 
+obstacles, are all handled by the \textit{Sliding Window Intervention} 
+mechanism, which actively guides the robot along the demonstration trajectory 
+at every time step; since the trajectory is collected while maintaining a safe 
+distance from obstacles, it naturally encodes obstacle avoidance. The residual 
+stagnation risk is addressed by the \textit{Safety Recovery Mechanism}, a 
+passive fallback that detects when the robot is stuck and restores it to a safe 
+state. Finally, the \textit{Intervention Termination} mechanism disables all 
+interventions once the policy becomes capable of completing the task 
+independently, preventing continuous intervention from suppressing exploration.
+
+All tasks considered in this paper involve interaction between a hand-held 
+object and a single target object, and the entire method is built upon and 
+extended from this demonstration trajectory.
+
+
+\subsubsection{Sliding Window Intervention}\label{sec:sliding}
+
+To leverage the demonstration trajectory for guiding the training process, we further define a sliding window. The length of the sliding window is equal to the index difference between $recover$ $point_0$ and $recover$ $point_1$ on the demonstration trajectory. The window contains a continuous segment of trajectory indices.
+At each time step, the system computes the distance between the current end-effector pose and all end-effector poses on the demonstration trajectory within the sliding window. The trajectory point with the minimum distance is selected and referred to as a potential intervention point $pipoint$. When the minimum distance exceeds the intervention threshold $th_2$, further judgment is required to determine whether intervention should be performed.
+
+To avoid pulling the robot back to past trajectory positions, a directional check is conducted on the $pipoint$. Let $v_1$ denote the tangent vector of the trajectory at the current $cpoint$, and let $v_2$ denote the vector from the current end-effector pose to the $pipoint$. The angle between these two vectors is computed. If the angle is greater than $90^\circ$, the $pipoint$ is considered to lie on a past segment of the trajectory, and the intervention is discarded. Otherwise, motion planning is used to move the robot to the $pipoint$.
+
+At initialization, the end point of the sliding window is located at the first point of the demonstration trajectory. When no intervention occurs, the sliding window moves forward along the demo trajectory by one step at each time step. If the starting point of the sliding window reaches the end of the trajectory, the portion of the window that has reached the trajectory end will remain fixed, while the remaining portion that has not yet reached the end will continue to move forward. Therefore, using the sliding window for intervention can effectively prevent two situations: (1) the robot oscillating around a fixed position due to convergence to a local optimum; and (2) the policy continuously outputting actions that move the robot away from the interaction object due to inaccurate Q-value estimation. Moreover, since the demonstration trajectory is collected while maintaining a safe distance from environmental obstacles, this intervention strategy guides the robot toward the demonstration trajectory, thereby preventing collisions with surrounding obstacles.
+
+\subsubsection{Safety Recovery Mechanism}\label{sec:recovery}
+To ensure that the system can promptly recover to a controllable and safe state when safety risks occur during training, we define two recovery points on the demonstration trajectory: $recover$ $point_0$ and $recover$ $point_1$. $Recover$ $point_0$ is defined as a safe recovery target. When a safety risk occurs, motion planning is used to guide the robot from the current state to $recover$ $point_0$. $Recover$ $point_1$ is defined as a trajectory point where the robot is in stable contact with the interaction object. These two recovery points can be identified by replaying the demonstration trajectory on the robot.
+During training, at each time step, the Euclidean distance between the current end-effector pose and all end-effector poses along the entire demonstration trajectory is computed. The trajectory point with the minimum distance is selected and referred to as the minimum point of the full trajectory $cpoint$. The system also maintains the minimum points over the most recent 20 time steps. If the difference between the current minimum point $cpoint_i$ and that from 20 time steps ago $cpoint_{i-20}$ is smaller than the threshold $th_1$, and $cpoint_i$ lies between $recover$ $point_0$ and $recover$ $point_1$ on the demonstration trajectory, the robot is considered unable to properly interact with the object.
+In this case, the system first uses motion planning to move the robot to $recover$ $point_0$, and then replays the demonstration trajectory segment between $recover$ $point_0$ and $recover$ $point_1$ to complete the recovery process.
+
+\subsubsection{Intervention Termination} Since the demonstration trajectory is not necessarily optimal, continuously applying intervention throughout training may reduce the policy’s exploration capability and limit the advantages of reinforcement learning. Therefore, in experiments without initial state randomization, if the total number of interventions in an episode is less than 10 and the episode successfully completes the task, all subsequent interventions are disabled.
+
+In all tasks considered in this paper, the threshold $th_1$ is set to 0.005 m, and the threshold $th_2$ is set to 0.02 m.
+
+
+
+
+
+\section{Experiments}
+
+We conduct real-world experiments to evaluate the effectiveness of AutoSERL, aiming to address the following three questions:
+(1) Does AutoSERL achieve higher efficiency compared to existing baselines?
+(2) What is the contribution of the sliding window intervention and the safety recovery mechanism to overall performance?
+(3) How well does AutoSERL perform under positional variations?
+
+
+
+% \subsection{Overview of Experiments}
+% We implement three categories of tasks, as illustrated in Fig.\ref{all_task}: insertion tasks, hanging tasks, and hinge-based tasks. The insertion tasks include plug insertion and USB insertion. The hanging tasks include hanging a correction tape, a hanger, and a spoon. The hinge-based task involves pulling out a drawer using a hook. These tasks are characterized by rich physical contact and low tolerance for execution errors, and therefore require high manipulation precision, accurate pose alignment, stable contact control, and strong robustness to disturbances.
+% The insertion tasks are conducted on a Franka robot arm with a parallel gripper and two wrist-mounted Intel RealSense D405 cameras. The hanging and hinge-based tasks are implemented on a UR5 robot equipped with an Inspire dexterous hand and two Intel RealSense D435 cameras. The overall setup is shown in Fig.\ref{settings}.
+% Across all tasks, the observation consists of RGB images from the two cameras and robot proprioceptive states. For the Franka platform, proprioception includes end-effector poses, velocity, forces/torques, and gripper state. For the UR5 platform, proprioception includes end-effector poses and forces/torques. The action space is a 6D delta end-effector pose for all tasks. Episodes terminate upon task success or after 300 time steps. Training uses manually annotated binary sparse rewards.
+% During evaluation, all automatic intervention mechanisms are disabled. Each task is evaluated over 50 episodes.
+
+% \subsection{Task Description}
+% We consider three categories of contact-intensive manipulation tasks with progressively structured physical constraints: insertion, hanging, and hinge-based tasks.
+% The insertion tasks demand high-precision control in constrained contact settings. In this category, we implement USB insertion and two-pin plug insertion. In both tasks, the initial distance between the gripper and the target configuration is approximately 15 cm. Success is defined as complete insertion of the object into the corresponding port or socket.
+% The hanging tasks require fine-grained control of both pose and trajectory to ensure correct geometric constraint interactions between the object’s hole and the hook. We implement three tasks in this category: hanging a hanger, hanging a correction tape, and hanging a spoon. In all tasks, the initial end-effector distance from the target hanging configuration is approximately 15 cm for the correction tape and spoon tasks, and approximately 20 cm for the hanger task. The task is considered successful when the hole of the correction tape or spoon, or the curved part of the hanger, establishes contact with the curved region of the hook.
+% The hinge-based task consists of drawer pulling. The robot must first hook the drawer handle and then pull the drawer outward by 5 cm. The initial distance between the hook and the handle is approximately 10 cm. Success is achieved when the drawer is displaced by 5 cm. The main challenge lies in maintaining stable contact between the hook and the handle after the initial engagement, while the drawer moves under the kinematic constraint of the hinge joint.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{figs/settings.jpg}
+    \caption{Experimental setup. Left: the setup for the hanging and hinge-based tasks, consisting of a UR5 robot and two Intel RealSense D435 cameras. Right: the setup for the insertion tasks, consisting of a Franka robot and two wrist-mounted Intel RealSense D405 cameras.}
+    \label{fig:settings}
+\end{figure}
+
+\subsection{Experimental Setup}
+
+\textbf{Hardware and Protocol.}
+The insertion tasks are conducted on a Franka robot arm with a parallel gripper 
+and two wrist-mounted Intel RealSense D405 cameras. The hanging and hinge-based 
+tasks are implemented on a UR5 robot equipped with an Inspire dexterous hand 
+and two Intel RealSense D435 cameras. The overall setup is shown in 
+Fig.~\ref{fig:settings}. Across all tasks, the observation consists of RGB images 
+from the two cameras and robot proprioceptive states. For the Franka platform, 
+proprioception includes end-effector poses, velocity, forces/torques, and 
+gripper state. For the UR5 platform, proprioception includes end-effector poses 
+and forces/torques. The action space is a 6D delta end-effector pose for all 
+tasks. Training uses manually annotated binary sparse rewards. Episodes 
+terminate upon task success or after 300 time steps. During evaluation, all 
+automatic intervention mechanisms are disabled, and each task is evaluated over 
+50 episodes.
+
+
+
+\textbf{Task Overview.}
+We implement three categories of contact-intensive manipulation tasks, as 
+illustrated in Fig.~\ref{fig:all_task}: insertion tasks (plug insertion and USB 
+insertion), hanging tasks (hanging a correction tape, a hanger, and a spoon), 
+and a hinge-based task (drawer pulling using a hook). These tasks are 
+characterized by rich physical contact and low tolerance for execution errors, 
+requiring high manipulation precision, accurate pose alignment, stable contact 
+control, and strong robustness to disturbances.
+If the above conditions are not satisfied, the robot may easily become stuck, as shown in Fig.\ref{fig:kazhu}.
+
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\linewidth]{figs/all_task.jpg}
+    \caption{Overview of the experimental tasks: (A)Plug Insertion. (B)USB Insertion. (C)Hanger Suspension. (D)Correction Tape Suspension. (E)Spoon Suspension. (F)Drawer Opening.}
+    \label{fig:all_task}
+\end{figure}
+
+\begin{figure}[th]
+    \centering
+    \includegraphics[width=.8\linewidth]{figs/kazhu.png}
+    \caption{Overview of the stuck cases across different tasks: (A)Plug Insertion. (B)USB Insertion. (C)Drawer Opening. (D)Hanger Suspension. (E)Correction Tape Suspension. (F)Spoon Suspension.}
+    \label{fig:kazhu}
+\end{figure}
+
+\textit{The insertion tasks} demand high-precision control in constrained contact 
+settings. In both USB insertion and two-pin plug insertion, the initial distance 
+between the gripper and the target configuration is approximately 15~cm. 
+Success is defined as complete insertion of the object into the corresponding 
+port or socket.
+
+\textit{The hanging tasks} require fine-grained control of both pose and trajectory to 
+ensure correct geometric constraint interactions between the object's hole and 
+the hook. The initial end-effector distance from the target hanging 
+configuration is approximately 15~cm for the correction tape and spoon tasks, 
+and approximately 20~cm for the hanger task. The task is considered successful 
+when the hole of the correction tape or spoon, or the curved part of the 
+hanger, establishes contact with the curved region of the hook.
+
+\textit{The hinge-based task} consists of drawer pulling. The robot must first hook the 
+drawer handle and then pull the drawer outward by 5~cm. The initial distance 
+between the hook and the handle is approximately 10~cm. Success is achieved 
+when the drawer is displaced by 5~cm. The main challenge lies in maintaining 
+stable contact between the hook and the handle after initial engagement, while 
+the drawer moves under the kinematic constraint of the hinge joint.
+
+
+\begin{table}[t]
+\centering
+\caption{Success rate of SERL and AutoSERL under the same training time budget.}
+\label{tab:serl_autoserl}
+\begin{tabular}{l|c|c|c}
+\toprule
+\multirow{2}{*}{Task} & \multirow{2}{*}{Training Time (min)} & \multicolumn{2}{c}{Success Rate} \\
+\cmidrule(lr){3-4}
+ &  & SERL & AutoSERL \\
+\midrule
+USB Insertion & 8  & 20/50 & 50/50 \\
+Plug Insertion & 8  & 0/50  & 50/50 \\
+Hanger Suspension & 33 & 0/50  & 50/50 \\
+Correction Tape Suspension & 25 & 6/50  & 50/50 \\
+Spoon Suspension & 35 & 0/50  & 50/50 \\
+Drawer Opening & 45 & 0/50  & 50/50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t!]
+\centering
+\caption{Success rate comparison between AutoSERL and baselines.}
+\label{tab:baseline_comparison}
+\begin{tabular}{lccc}
+\toprule
+Task & AutoSERL & BC & MILES \\
+\midrule
+USB Insertion & 50/50 & 5/50  & 0/50  \\
+Plug Insertion & 50/50 & 2/50  & 33/50 \\
+Correction Tape Suspension & 50/50 & 38/50 & 1/50  \\
+Hanger Suspension & 50/50 & 37/50 & 42/50 \\
+Spoon Suspension & 50/50 & 0/50  & 2/50  \\
+Drawer Opening & 50/50 & 35/50 & 0/50  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t!]
+    \vspace{10mm}
+    \centering
+    \includegraphics[width=\linewidth]{figs/all_taskslater.png}
+    \caption{Training curves of time versus intervention steps and time versus episode return for each task under SERL and AutoSERL.}
+    \label{training_figs}
+\end{figure}
+
+% \subsection{Efficiency Comparison}
+% To evaluate the efficiency of AutoSERL, we compare it with SERL\cite{luo2024serl} under the same training time budget. For each task, SERL is initialized with 20 demonstration trajectories. We report the success rate achieved by both methods within identical training time. As shown in Table \ref{tab:serl_autoserl}, AutoSERL achieves higher success rates than SERL under the same training duration, demonstrating improved sample efficiency.
+% Fig.\ref{training_figs} presents the training curves of time versus intervention steps and time versus episode return for each task under SERL and AutoSERL. From the time versus intervention steps curve, we observe that the number of automatic intervention steps gradually decreases as training progresses, indicating that the learned policy increasingly approaches the demonstration behavior. From the time versus episode return curve, we observe that, after the same training duration, AutoSERL is able to stably accomplish the tasks without intervention, whereas SERL fails to achieve consistent task success.
+% To further validate the effectiveness of AutoSERL, we compare it with BC\cite{luo2025precise} and MILES\cite{papagiannis2024miles} in terms of final success rate. For BC, 1 demonstration is used for the hinge-based task, 10 demonstrations are used for the hanging tasks, and 20 demonstrations are used for the insertion tasks. When implementing MILES, we adopt the same data augmentation randomization range as reported in the original work, namely ±4 cm in translation and ±4 degrees in rotation. The results are summarized in Table \ref{tab:baseline_comparison}. AutoSERL consistently outperforms both baselines across all tasks, indicating its superior performance in real-world manipulation scenarios.
+\subsection{Results and Analysis}
+
+\textbf{Training Efficiency.}
+We compare AutoSERL with SERL~\cite{luo2024serl} under the same training time 
+budget to evaluate training efficiency. For each task, SERL is initialized with 
+20 demonstration trajectories. As shown in Table~\ref{tab:serl_autoserl}, 
+AutoSERL achieves higher success rates than SERL under identical training 
+duration, demonstrating improved sample efficiency. Fig.~\ref{training_figs} 
+presents the training curves for each task. The intervention steps curve shows 
+that the number of automatic interventions gradually decreases as training 
+progresses, indicating that the learned policy increasingly approximates the 
+demonstration behavior. The episode return curve shows that AutoSERL stably 
+accomplishes the tasks without intervention after the same training duration, 
+whereas SERL fails to achieve consistent task success.
+
+\textbf{Comparison with Baselines.}
+To further validate the effectiveness of AutoSERL, we compare it with 
+BC and MILES~\cite{papagiannis2024miles} in terms of 
+final success rate. For BC, 1 demonstration is used for the hinge-based task, 
+10 demonstrations for the hanging tasks, and 20 demonstrations for the 
+insertion tasks. For MILES, we adopt the same data augmentation randomization 
+range as reported in the original work, namely $\pm$4~cm in translation and 
+$\pm$4$^\circ$ in rotation. The results are summarized in 
+Table~\ref{tab:baseline_comparison}. AutoSERL consistently outperforms both 
+baselines across all tasks, demonstrating its superior performance in 
+real-world manipulation scenarios.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=.95\linewidth]{figs/ablation.png}
+    \caption{Ablation study on the plug insertion and USB insertion tasks.}
+    \label{ablation}
+\end{figure}
+
+\subsection{Ablation Studies}
+% To evaluate the contribution of each component in AutoSERL, we conduct two ablation studies: (1) No sliding window intervention: we remove the sliding window intervention mechanism, and no intervention points are used to guide the robot during training. (2) No recovery mechanism: We remove the safety recovery mechanism. During training, when the robot encounters failure states, it must rely solely on its own exploration to recover without explicit recovery guidance.
+
+% We perform the ablation experiments on two insertion tasks. Fig.\ref{ablation} presents the results for the plug insertion and USB insertion tasks, respectively. As shown in the curves, the full AutoSERL method achieves a 100\% success rate the earliest. When the sliding-window intervention is removed, the number of training steps required to reach 100\% success increases. When only the sliding-window intervention is retained without the recovery mechanism, the performance becomes worse than SERL. This is because the sliding-window strategy may guide the robot into challenging or near-failure states such as being stuck. Without an explicit recovery mechanism, the policy must rely solely on exploration to escape these states, which is difficult under sparse rewards. As a result, the failure rate increases and learning becomes less stable.
+% Based on the above results, all AutoSERL variants improve training performance compared with the SERL baseline without intervention mechanisms, while the full AutoSERL achieves the best results, highlighting the importance and complementarity of both components.
+To evaluate the contribution of each component in AutoSERL, we conduct two 
+ablation studies: (1) \textit{No sliding window intervention}: the sliding 
+window intervention mechanism is removed, and no intervention points are used 
+to guide the robot during training. (2) \textit{No recovery mechanism}: the 
+safety recovery mechanism is removed, and when the robot encounters failure 
+states, it must rely solely on its own exploration to recover.
+
+We perform the ablation experiments on the plug insertion and USB insertion 
+tasks. Fig.~\ref{ablation} presents the results. The full AutoSERL method 
+reaches a 100\% success rate the earliest. Removing the sliding window 
+intervention increases the number of training steps required to reach 100\% 
+success. Removing only the recovery mechanism while retaining the sliding 
+window intervention leads to worse performance than SERL, because the sliding 
+window strategy may guide the robot into near-failure states. Without an 
+explicit recovery mechanism, the policy must rely solely on sparse-reward 
+exploration to escape these states, resulting in higher failure rates and less 
+stable learning.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=.55\linewidth]{figs/random.png}
+    \caption{Plug insertion under positional variations.}
+    \label{random}
+\end{figure}
+
+\subsection{Evaluation under Positional Variations}
+% We randomize the initial object position within a ±3 cm range in the x–y plane to introduce positional perturbations. Due to the variation in the number of interventions under different initial conditions, all intervention mechanisms were kept active throughout this experiment. Under this setting, we compare SERL and AutoSERL using the same training configuration and report the training-time versus success-rate curves for the plug insertion task. As illustrated in Fig.\ref{random}, AutoSERL achieves higher success rates and more stable convergence than SERL, demonstrating improved robustness to positional variations.
+We randomize the initial object position within a $\pm$3~cm range in the 
+$x$--$y$ plane to evaluate robustness to positional perturbations. Since 
+positional variations alter the distribution of intervention triggers during 
+training, all intervention mechanisms are kept active throughout the training 
+phase of this experiment; evaluation follows the standard protocol with all 
+interventions disabled. Under this setting, we compare SERL and AutoSERL using 
+the same training configuration and report training-time versus success-rate 
+curves for the plug insertion task. As illustrated in Fig.~\ref{random}, 
+AutoSERL achieves higher success rates and more stable convergence than SERL, 
+demonstrating improved robustness to positional variations.
+
+\section{Limitations}
+Although AutoSERL shows strong performance in real-world manipulation tasks, several limitations remain. First, the proposed recovery mechanism is relatively simple and relies on motion planning, which may not always succeed when dealing with complex object geometries or cluttered environments. Developing more general recovery strategies, such as learning-based recovery policies, is an important direction for future work. Second, the method still requires a manually collected demonstration trajectory to initialize the guidance mechanism. Further reducing human involvement through automatic trajectory generation would improve the practicality of the approach.
+
+\section{Conclusion}
+We propose AutoSERL, a real-world reinforcement learning method that enables training through automatic intervention using only a single demonstration trajectory. AutoSERL incorporates sliding window intervention, safety recovery intervention, and intervention termination to ensure safe and stable real-world reinforcement learning.
+AutoSERL outperforms multi-demonstration RL, behavior cloning, and one-shot imitation learning baselines across six contact-intensive tasks spanning three task categories.
+In the future, AutoSERL can be combined with techniques such as automatic reward generation and automatic reset, enabling fully autonomous real-world reinforcement learning without human involvement.
+
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+
+%%%%
+% \clearpage\mbox{}Page \thepage\ of the manuscript. This is the last page.
+% \par\vfill\par
+% Now we have reached the maximum length of an ECCV \ECCVyear{} submission (excluding references and acknowledgements).
+% References should start immediately after the main text, but can continue past p.\ 14 if needed. 
+% \clearpage  
+%%%%publicdel
+% TODO FINAL: This \clearpage needs to be removed from both review and camera-ready versions.
+
+% \section*{Acknowledgements}
+% Please insert your acknowledgments here.
+
+% ---- Bibliography ----
+%
+% BibTeX users should specify bibliography style 'splncs04'.
+% References will then be sorted and formatted in the correct style.
+%
+\bibliographystyle{splncs04}
+\bibliography{main}
+\end{document}
